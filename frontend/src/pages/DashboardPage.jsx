@@ -160,7 +160,7 @@ export default function DashboardPage() {
       </div>
 
       {/* Feature highlights */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 16, marginTop: 8 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 24, marginTop: 24 }}>
         {[
           {
             icon: '🌲',
@@ -198,10 +198,10 @@ export default function DashboardPage() {
             color: 'var(--red)',
           },
           {
-            icon: '💡',
-            title: 'Explainable AI',
-            sub: 'Evidence chain + feature importance',
-            desc: "Every verdict comes with a human-readable evidence chain and model's feature importance bar chart.",
+            icon: '🤖',
+            title: 'AI Chatbot Assistant',
+            sub: 'Email & Document scan',
+            desc: "Pasted text, email body, and document scanning to find threats and map fake sites to real ones.",
             color: 'var(--amber)',
           },
         ].map(({ icon, title, sub, desc, color }) => (

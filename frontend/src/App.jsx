@@ -1,11 +1,11 @@
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { Shield, Search, Network, Fingerprint, Cpu, Activity, Zap } from 'lucide-react'
+import { Shield, Search, Network, Fingerprint, Cpu, Activity, Zap, Bot } from 'lucide-react'
 import DashboardPage from './pages/DashboardPage'
 import ScannerPage from './pages/ScannerPage'
 import CampaignPage from './pages/CampaignPage'
 import FingerprintPage from './pages/FingerprintPage'
-import TechStackPage from './pages/TechStackPage'
+import AssistantPage from './pages/AssistantPage'
 import { useFeed } from './hooks/useFeed'
 
 const NAV = [
@@ -13,44 +13,8 @@ const NAV = [
   { path: '/scanner',    icon: Search,       label: 'URL Scanner',       section: null },
   { path: '/campaigns',  icon: Network,      label: 'Campaign Graph',    section: null },
   { path: '/fingerprint',icon: Fingerprint,  label: 'Brand Shield',      section: 'ANALYSIS' },
-  { path: '/tech',       icon: Cpu,          label: 'Tech Stack',        section: null },
+  { path: '/assistant',  icon: Bot,          label: 'AI Assistant',      section: null },
 ]
-
-function MatrixRain() {
-  const canvasRef = useRef(null)
-  useEffect(() => {
-    const canvas = canvasRef.current
-    if (!canvas) return
-    const ctx = canvas.getContext('2d')
-    const resize = () => {
-      canvas.width = window.innerWidth
-      canvas.height = window.innerHeight
-    }
-    resize()
-    window.addEventListener('resize', resize)
-
-    const cols = Math.floor(canvas.width / 20)
-    const drops = Array(cols).fill(1)
-    const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノ'
-
-    const draw = () => {
-      ctx.fillStyle = 'rgba(8,8,16,0.05)'
-      ctx.fillRect(0, 0, canvas.width, canvas.height)
-      ctx.fillStyle = '#00ff88'
-      ctx.font = '14px JetBrains Mono'
-      drops.forEach((y, i) => {
-        const char = chars[Math.floor(Math.random() * chars.length)]
-        ctx.fillText(char, i * 20, y * 20)
-        if (y * 20 > canvas.height && Math.random() > 0.975) drops[i] = 0
-        drops[i]++
-      })
-    }
-
-    const id = setInterval(draw, 60)
-    return () => { clearInterval(id); window.removeEventListener('resize', resize) }
-  }, [])
-  return <canvas ref={canvasRef} id="matrix-canvas" />
-}
 
 function Ticker({ feed }) {
   const items = feed.length
@@ -99,8 +63,6 @@ export default function App() {
 
   return (
     <>
-      <MatrixRain />
-      <div className="scanline-overlay" />
       <div className="app-layout">
 
         {/* ── Sidebar ── */}
@@ -164,7 +126,7 @@ export default function App() {
               <Route path="/scanner"     element={<ScannerPage />} />
               <Route path="/campaigns"   element={<CampaignPage />} />
               <Route path="/fingerprint" element={<FingerprintPage />} />
-              <Route path="/tech"        element={<TechStackPage />} />
+              <Route path="/assistant"   element={<AssistantPage />} />
             </Routes>
           </main>
         </div>
