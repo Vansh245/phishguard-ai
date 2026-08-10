@@ -54,7 +54,7 @@ export default function FingerprintPage() {
     if (!screenshot) return
     setLoading(true)
     setResult(null)
-    const API_BASE = 'https://phishguard-api.onrender.com'
+    const API_BASE = 'https://phishguard-ai-2-g5ca.onrender.com'
     try {
       const form = new FormData()
       form.append('screenshot', screenshot)

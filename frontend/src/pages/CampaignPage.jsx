@@ -29,7 +29,7 @@ export default function CampaignPage() {
     setLoading(true)
     setCampaigns(null)
     setSelected(null)
-    const API_BASE = 'https://phishguard-api.onrender.com'
+    const API_BASE = 'https://phishguard-ai-2-g5ca.onrender.com'
     try {
       const res = await axios.post(`${API_BASE}/cluster`, { urls, threshold })
       setCampaigns(res.data.campaigns)

@@ -13,7 +13,7 @@ export function useFeed() {
 
   useEffect(() => {
     // Render production endpoint URL
-    const API_BASE = 'https://phishguard-api.onrender.com'
+    const API_BASE = 'https://phishguard-ai-2-g5ca.onrender.com'
 
     const check = async () => {
       try {
