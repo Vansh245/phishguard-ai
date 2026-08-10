@@ -9,11 +9,11 @@ import AssistantPage from './pages/AssistantPage'
 import { useFeed } from './hooks/useFeed'
 
 const NAV = [
+  { path: '/assistant',  icon: Bot,          label: 'AI Assistant',      section: 'CO-PILOT' },
   { path: '/',           icon: Activity,     label: 'Dashboard',         section: 'INTELLIGENCE' },
   { path: '/scanner',    icon: Search,       label: 'URL Scanner',       section: null },
   { path: '/campaigns',  icon: Network,      label: 'Campaign Graph',    section: null },
   { path: '/fingerprint',icon: Fingerprint,  label: 'Brand Shield',      section: 'ANALYSIS' },
-  { path: '/assistant',  icon: Bot,          label: 'AI Assistant',      section: null },
 ]
 
 function Ticker({ feed }) {

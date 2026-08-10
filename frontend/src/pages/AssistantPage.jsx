@@ -195,7 +195,7 @@ export default function AssistantPage() {
                   background: m.sender === 'user' ? 'var(--green-glow)' : 'var(--blue-glow)',
                   border: `1px solid ${m.sender === 'user' ? 'var(--green-border)' : 'rgba(61,156,245,0.2)'}`,
                   display: 'flex',
-                  alignItems: center,
+                  alignItems: 'center',
                   justifyContent: 'center',
                   fontSize: 14,
                   flexShrink: 0,
