@@ -1,0 +1,23 @@
+services:
+  # ── Frontend: React/Vite static site ──────────────────────────────
+  - type: web
+    name: phishguard-ai-frontend
+    runtime: static
+    buildCommand: cd frontend && npm install && npm run build
+    staticPublishPath: frontend/dist
+    routes:
+      # Without this, direct navigation/refresh on any client-side route
+      # (e.g. /fingerprint, /scanner) 404s instead of loading the SPA.
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # ── Backend: FastAPI service ───────────────────────────────────────
+  - type: web
+    name: phishguard-ai-backend
+    runtime: python
+    buildCommand: cd backend && pip install -r requirements.txt
+    startCommand: cd backend && uvicorn app:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.0

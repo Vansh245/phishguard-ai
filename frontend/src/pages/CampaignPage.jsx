@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { Network, Play, Download } from 'lucide-react'
 import axios from 'axios'
 import CampaignGraph from '../components/CampaignGraph'
+import { API_BASE } from '../config'
 
 const DEMO_URLS = `http://paypa1-secure.tk/login/verify
 http://paypal-confirm.tk/login/update
@@ -29,7 +30,6 @@ export default function CampaignPage() {
     setLoading(true)
     setCampaigns(null)
     setSelected(null)
-    const API_BASE = 'https://phishguard-ai-2-g5ca.onrender.com'
     try {
       const res = await axios.post(`${API_BASE}/cluster`, { urls, threshold })
       setCampaigns(res.data.campaigns)

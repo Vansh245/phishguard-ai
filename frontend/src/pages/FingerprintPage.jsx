@@ -2,6 +2,7 @@ import { useState, useCallback } from 'react'
 import { useDropzone } from 'react-dropzone'
 import { Fingerprint } from 'lucide-react'
 import axios from 'axios'
+import { API_BASE } from '../config'
 
 const BRANDS = ['PayPal', 'Google', 'Amazon', 'Apple', 'Microsoft', 'Netflix', 'Facebook', 'Chase']
 
@@ -54,7 +55,6 @@ export default function FingerprintPage() {
     if (!screenshot) return
     setLoading(true)
     setResult(null)
-    const API_BASE = 'https://phishguard-ai-2-g5ca.onrender.com'
     try {
       const form = new FormData()
       form.append('screenshot', screenshot)

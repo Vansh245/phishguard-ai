@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
 import axios from 'axios'
+import { API_BASE } from '../config'
 
 export function useFeed() {
   const [feed, setFeed] = useState([])
@@ -12,9 +13,6 @@ export function useFeed() {
   })
 
   useEffect(() => {
-    // Render production endpoint URL
-    const API_BASE = 'https://phishguard-ai-2-g5ca.onrender.com'
-
     const check = async () => {
       try {
         await axios.get(`${API_BASE}/health`, { timeout: 8000 })

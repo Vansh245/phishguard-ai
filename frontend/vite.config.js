@@ -6,12 +6,12 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      '/scan': 'https://phishguard-api.onrender.com',
-      '/cluster': 'https://phishguard-api.onrender.com',
-      '/fingerprint': 'https://phishguard-api.onrender.com',
-      '/stats': 'https://phishguard-api.onrender.com',
-      '/feed': 'https://phishguard-api.onrender.com',
-      '/health': 'https://phishguard-api.onrender.com',
+      '/scan': 'https://phishguard-ai-2-g5ca.onrender.com',
+      '/cluster': 'https://phishguard-ai-2-g5ca.onrender.com',
+      '/fingerprint': 'https://phishguard-ai-2-g5ca.onrender.com',
+      '/stats': 'https://phishguard-ai-2-g5ca.onrender.com',
+      '/feed': 'https://phishguard-ai-2-g5ca.onrender.com',
+      '/health': 'https://phishguard-ai-2-g5ca.onrender.com',
     }
   }
 })

@@ -3,6 +3,7 @@ import { useDropzone } from 'react-dropzone'
 import axios from 'axios'
 import { Upload, Search, AlertTriangle, CheckCircle, ChevronDown, ChevronUp, Loader } from 'lucide-react'
 import ThreatDNA from '../components/ThreatDNA'
+import { API_BASE } from '../config'
 
 const EXAMPLE_URLS = [
   { url: 'http://paypa1-secure-login.tk/account/verify', type: 'phishing', label: '🎣 Typosquat' },
@@ -154,7 +155,6 @@ export default function ScannerPage() {
     setScanStep(0)
 
     const stepDelay = (ms) => new Promise(r => setTimeout(r, ms))
-    const API_BASE = 'https://phishguard-ai-2-g5ca.onrender.com'
 
     try {
       await stepDelay(400); setScanStep(1)
@@ -180,7 +180,6 @@ export default function ScannerPage() {
     if (!urls.length) return
     setBatchLoading(true)
     setBatchResults(null)
-    const API_BASE = 'https://phishguard-ai-2-g5ca.onrender.com'
     try {
       const res = await axios.post(`${API_BASE}/scan/batch`, { urls })
       setBatchResults(res.data.results)
