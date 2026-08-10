@@ -17,7 +17,7 @@ export function useFeed() {
 
     const check = async () => {
       try {
-        await axios.get(`${API_BASE}/health`, { timeout: 2500 })
+        await axios.get(`${API_BASE}/health`, { timeout: 8000 })
         setBackendOnline(true)
       } catch {
         setBackendOnline(false)
