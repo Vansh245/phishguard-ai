@@ -46,10 +46,19 @@ app.add_middleware(
 )
 
 # ── In-memory scan history (last 200 results) ─────────────────────────────────
-scan_history: deque = deque(maxlen=200)
+from datetime import datetime, timezone
+scan_history: deque = deque(
+    [
+        {"url": "http://paypa1-secure.tk/login/verify", "verdict": "PHISHING", "confidence_pct": 94.2, "scanned_at": datetime.now(timezone.utc).isoformat()},
+        {"url": "https://www.google.com/", "verdict": "SAFE", "confidence_pct": 99.1, "scanned_at": datetime.now(timezone.utc).isoformat()},
+        {"url": "http://amaz0n-billing.xyz/account", "verdict": "PHISHING", "confidence_pct": 88.7, "scanned_at": datetime.now(timezone.utc).isoformat()},
+        {"url": "https://github.com/explore", "verdict": "SAFE", "confidence_pct": 98.4, "scanned_at": datetime.now(timezone.utc).isoformat()},
+    ],
+    maxlen=200,
+)
 stats_lock = threading.Lock()
-_total_scanned = 0
-_total_phishing = 0
+_total_scanned = 4
+_total_phishing = 2
 _model_ready = False
 
 
