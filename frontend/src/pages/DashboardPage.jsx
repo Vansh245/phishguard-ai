@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react'
-import { Activity, Link, Shield, TrendingUp, AlertTriangle } from 'lucide-react'
+import { Activity, Link as LinkIcon, Shield, TrendingUp, AlertTriangle } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { useFeed } from '../hooks/useFeed'
 
 function AnimatedCounter({ target, duration = 1200 }) {
@@ -71,7 +72,7 @@ export default function DashboardPage() {
           Intelligence Dashboard
         </h1>
         <p className="page-sub">
-          Real-time phishing threat intelligence — live scan feed, campaign activity, and system health
+          Real-time phishing threat intelligence — live threat feed, campaign activity, and system health
         </p>
       </div>
 
@@ -168,6 +169,7 @@ export default function DashboardPage() {
             sub: 'RandomForest + HistGradientBoosting',
             desc: 'Both models compete on 5-fold CV F1. Winner serves production inference.',
             color: 'var(--green)',
+            path: '/scanner',
           },
           {
             icon: '🕸️',
@@ -175,6 +177,7 @@ export default function DashboardPage() {
             sub: 'Graph community detection',
             desc: 'Louvain algorithm groups coordinated phishing domains into attack campaigns.',
             color: 'var(--blue)',
+            path: '/campaigns',
           },
           {
             icon: '👁️',
@@ -182,6 +185,7 @@ export default function DashboardPage() {
             sub: 'pHash + Color DNA',
             desc: 'Detects pixel-cloned login pages impersonating PayPal, Google, Apple and 8 more brands.',
             color: 'var(--purple)',
+            path: '/fingerprint',
           },
           {
             icon: '🔤',
@@ -189,6 +193,7 @@ export default function DashboardPage() {
             sub: 'Zero network required',
             desc: 'From URL string alone: edit-distance typosquats, brand tokens, Shannon entropy, suspicious TLDs.',
             color: 'var(--green)',
+            path: '/scanner',
           },
           {
             icon: '🚨',
@@ -196,6 +201,7 @@ export default function DashboardPage() {
             sub: 'Novel obfuscation signals',
             desc: 'Catches IDN homographs, @-symbol tricks, hex-encoded chars — not in training data.',
             color: 'var(--red)',
+            path: '/scanner',
           },
           {
             icon: '🤖',
@@ -203,14 +209,27 @@ export default function DashboardPage() {
             sub: 'Email & Document scan',
             desc: "Pasted text, email body, and document scanning to find threats and map fake sites to real ones.",
             color: 'var(--amber)',
+            path: '/assistant',
           },
-        ].map(({ icon, title, sub, desc, color }) => (
-          <div key={title} className="card" style={{ borderTop: `2px solid ${color}44` }}>
+        ].map(({ icon, title, sub, desc, color, path }) => (
+          <Link
+            key={title}
+            to={path}
+            className="card"
+            style={{
+              borderTop: `2px solid ${color}44`,
+              textDecoration: 'none',
+              display: 'block',
+              transition: 'transform 0.2s',
+            }}
+            onMouseEnter={e => e.currentTarget.style.transform = 'translateY(-2px)'}
+            onMouseLeave={e => e.currentTarget.style.transform = 'translateY(0)'}
+          >
             <div style={{ fontSize: 28, marginBottom: 10 }}>{icon}</div>
             <div style={{ fontSize: 14, fontWeight: 700, color, marginBottom: 2 }}>{title}</div>
             <div style={{ fontSize: 10, fontFamily: 'var(--font-mono)', color: 'var(--text-muted)', marginBottom: 8, textTransform: 'uppercase', letterSpacing: 0.5 }}>{sub}</div>
             <div style={{ fontSize: 12, color: 'var(--text-secondary)', lineHeight: 1.6 }}>{desc}</div>
-          </div>
+          </Link>
         ))}
       </div>
     </div>
