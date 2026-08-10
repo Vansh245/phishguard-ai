@@ -29,8 +29,9 @@ export default function CampaignPage() {
     setLoading(true)
     setCampaigns(null)
     setSelected(null)
+    const API_BASE = 'https://phishguard-api.onrender.com'
     try {
-      const res = await axios.post('/cluster', { urls, threshold })
+      const res = await axios.post(`${API_BASE}/cluster`, { urls, threshold })
       setCampaigns(res.data.campaigns)
     } catch {
       // Offline mock

@@ -3,7 +3,7 @@ import path from 'path'
 import { fileURLToPath } from 'url'
 
 const OUT = 'C:/Users/Vansh/.gemini/antigravity/brain/3622e0da-c4ac-4560-9afa-f49847381191'
-const BASE = 'http://localhost:5173'
+const BASE = 'https://phishguard-ai-1-n0z0.onrender.com'
 
 async function shot(page, name, waitMs = 1200) {
   await new Promise(r => setTimeout(r, waitMs))
@@ -24,12 +24,14 @@ async function shot(page, name, waitMs = 1200) {
 
   // ── 1. Dashboard ──────────────────────────────────────────────
   console.log('\n📸 Step 1: Dashboard')
-  await page.goto(`${BASE}/`, { waitUntil: 'networkidle0' })
+  await page.goto(`${BASE}/`, { waitUntil: 'networkidle2' })
+  await new Promise(r => setTimeout(r, 2000))
   await shot(page, '01_dashboard')
 
   // ── 2. URL Scanner (empty) ────────────────────────────────────
   console.log('\n📸 Step 2: URL Scanner')
-  await page.goto(`${BASE}/scanner`, { waitUntil: 'networkidle0' })
+  await page.goto(`${BASE}/scanner`, { waitUntil: 'networkidle2' })
+  await new Promise(r => setTimeout(r, 2000))
   await shot(page, '02_scanner')
 
   // ── 3. Scan a phishing URL (click Typosquat chip) ─────────────
@@ -46,16 +48,16 @@ async function shot(page, name, waitMs = 1200) {
     await shot(page, '04_scanner_result')
   } else {
     // Fallback: type URL manually
-    await page.focus('#url-input')
-    await page.type('#url-input', 'http://paypa1-secure-login.tk/account/verify')
-    await page.click('#scan-btn')
-    await new Promise(r => setTimeout(r, 3500))
+    await page.type("input", 'http://paypa1-secure-login.tk/account/verify')
+    await page.click('button')
+    await new Promise(r => setTimeout(r, 4500))
     await shot(page, '04_scanner_result')
   }
 
   // ── 4. Campaign Graph (run clustering) ────────────────────────
   console.log('\n📸 Step 4: Campaign Graph')
-  await page.goto(`${BASE}/campaigns`, { waitUntil: 'networkidle0' })
+  await page.goto(`${BASE}/campaigns`, { waitUntil: 'networkidle2' })
+  await new Promise(r => setTimeout(r, 2000))
   await shot(page, '05_campaign_empty')
 
   // Click Run Clustering button
@@ -68,17 +70,19 @@ async function shot(page, name, waitMs = 1200) {
     }
   }
   console.log('  Waiting for clustering...')
-  await new Promise(r => setTimeout(r, 3000))
+  await new Promise(r => setTimeout(r, 4000))
   await shot(page, '06_campaign_graph')
 
   // ── 5. Brand Shield ───────────────────────────────────────────
   console.log('\n📸 Step 5: Brand Shield')
-  await page.goto(`${BASE}/fingerprint`, { waitUntil: 'networkidle0' })
+  await page.goto(`${BASE}/fingerprint`, { waitUntil: 'networkidle2' })
+  await new Promise(r => setTimeout(r, 2000))
   await shot(page, '07_brand_shield')
 
   // ── 6. Tech Stack ─────────────────────────────────────────────
   console.log('\n📸 Step 6: Tech Stack')
-  await page.goto(`${BASE}/tech`, { waitUntil: 'networkidle0' })
+  await page.goto(`${BASE}/tech`, { waitUntil: 'networkidle2' })
+  await new Promise(r => setTimeout(r, 2000))
   await shot(page, '08_tech_stack')
   // Scroll down to see more
   await page.evaluate(() => window.scrollBy(0, 600))

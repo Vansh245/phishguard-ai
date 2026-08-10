@@ -154,12 +154,13 @@ export default function ScannerPage() {
     setScanStep(0)
 
     const stepDelay = (ms) => new Promise(r => setTimeout(r, ms))
+    const API_BASE = 'https://phishguard-api.onrender.com'
 
     try {
       await stepDelay(400); setScanStep(1)
       await stepDelay(400); setScanStep(2)
 
-      const res = await axios.post('/scan', { url: target })
+      const res = await axios.post(`${API_BASE}/scan`, { url: target })
       setScanStep(3)
       await stepDelay(300)
       setResult(res.data)
@@ -179,8 +180,9 @@ export default function ScannerPage() {
     if (!urls.length) return
     setBatchLoading(true)
     setBatchResults(null)
+    const API_BASE = 'https://phishguard-api.onrender.com'
     try {
-      const res = await axios.post('/scan/batch', { urls })
+      const res = await axios.post(`${API_BASE}/scan/batch`, { urls })
       setBatchResults(res.data.results)
     } catch {
       // Offline mock

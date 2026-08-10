@@ -75,6 +75,12 @@ export default function DashboardPage() {
         </p>
       </div>
 
+      {!liveFeed.length && (
+        <div className="info-box warning" style={{ marginBottom: 24 }}>
+          ⚠️ <strong>System Warning:</strong> The central Threat Intelligence API is currently offline. Showing synthetic/cached intelligence feeds for demo purposes. Live URL scanning will use offline mock heuristic models.
+        </div>
+      )}
+
       {/* Stat cards */}
       <div className="stats-grid">
         {STAT_CARDS.map((s) => (
@@ -100,8 +106,8 @@ export default function DashboardPage() {
           <div className="card-title">
             <span className="card-title-dot" />
             Live Scan Feed
-            <span style={{ marginLeft: 'auto', fontSize: 10, color: 'var(--green)', fontFamily: 'var(--font-mono)', animation: 'pulse-dot 2s infinite' }}>
-              ● LIVE
+            <span style={{ marginLeft: 'auto', fontSize: 10, color: liveFeed.length ? 'var(--green)' : 'var(--amber)', fontFamily: 'var(--font-mono)', animation: 'pulse-dot 2s infinite' }}>
+              ● {liveFeed.length ? 'LIVE' : 'DEMO MODE (API OFFLINE)'}
             </span>
           </div>
           <div className="feed-list">

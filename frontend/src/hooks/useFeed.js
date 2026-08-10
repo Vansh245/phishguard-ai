@@ -12,9 +12,12 @@ export function useFeed() {
   })
 
   useEffect(() => {
+    // Render production endpoint URL
+    const API_BASE = 'https://phishguard-api.onrender.com'
+
     const check = async () => {
       try {
-        await axios.get('/health', { timeout: 2000 })
+        await axios.get(`${API_BASE}/health`, { timeout: 2500 })
         setBackendOnline(true)
       } catch {
         setBackendOnline(false)
@@ -24,8 +27,8 @@ export function useFeed() {
     const fetchFeed = async () => {
       try {
         const [feedRes, statsRes] = await Promise.all([
-          axios.get('/feed?limit=30'),
-          axios.get('/stats'),
+          axios.get(`${API_BASE}/feed?limit=30`),
+          axios.get(`${API_BASE}/stats`),
         ])
         setFeed(feedRes.data.feed || [])
         setStats(statsRes.data)
@@ -34,7 +37,7 @@ export function useFeed() {
 
     check()
     fetchFeed()
-    const id = setInterval(() => { check(); fetchFeed() }, 5000)
+    const id = setInterval(() => { check(); fetchFeed() }, 6000)
     return () => clearInterval(id)
   }, [])
 

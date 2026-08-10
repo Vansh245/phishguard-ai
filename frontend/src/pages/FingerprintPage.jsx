@@ -54,11 +54,12 @@ export default function FingerprintPage() {
     if (!screenshot) return
     setLoading(true)
     setResult(null)
+    const API_BASE = 'https://phishguard-api.onrender.com'
     try {
       const form = new FormData()
       form.append('screenshot', screenshot)
       form.append('threshold', threshold)
-      const res = await axios.post('/fingerprint', form)
+      const res = await axios.post(`${API_BASE}/fingerprint`, form)
       setResult(res.data)
     } catch {
       // Offline mock
