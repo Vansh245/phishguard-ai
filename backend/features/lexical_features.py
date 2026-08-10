@@ -1,0 +1,231 @@
+"""
+Lexical feature extractor — works offline, no network required.
+Extracts ~30 signals from a URL string alone.
+"""
+import re
+import math
+from urllib.parse import urlparse
+
+SUSPICIOUS_TLDS = {
+    ".tk", ".ml", ".ga", ".cf", ".gq", ".xyz", ".top", ".club",
+    ".online", ".site", ".icu", ".vip", ".live", ".work", ".stream",
+    ".download", ".click", ".link", ".shop", ".pw", ".cc", ".info",
+}
+
+SHORTENERS = {
+    "bit.ly", "tinyurl.com", "t.co", "goo.gl", "ow.ly", "buff.ly",
+    "is.gd", "cli.gs", "pic.gd", "rebrand.ly", "cutt.ly", "shorte.st",
+}
+
+CREDENTIAL_KEYWORDS = [
+    "login", "signin", "sign-in", "verify", "secure", "account",
+    "update", "confirm", "banking", "password", "credential",
+    "wallet", "billing", "invoice", "urgent", "suspended", "alert",
+    "security", "authenticate", "validate", "access", "authorize",
+]
+
+KNOWN_BRANDS = [
+    "paypal", "google", "amazon", "apple", "microsoft", "facebook",
+    "instagram", "netflix", "bank", "wellsfargo", "chase", "citibank",
+    "twitter", "linkedin", "dropbox", "icloud", "ebay", "walmart",
+    "fedex", "dhl", "usps", "irs", "coinbase", "binance",
+]
+
+
+def _entropy(s: str) -> float:
+    if not s:
+        return 0.0
+    freq = {}
+    for c in s:
+        freq[c] = freq.get(c, 0) + 1
+    n = len(s)
+    return -sum((f / n) * math.log2(f / n) for f in freq.values())
+
+
+def _edit_distance(a: str, b: str) -> int:
+    m, n = len(a), len(b)
+    dp = list(range(n + 1))
+    for i in range(1, m + 1):
+        prev = dp[:]
+        dp[0] = i
+        for j in range(1, n + 1):
+            if a[i - 1] == b[j - 1]:
+                dp[j] = prev[j - 1]
+            else:
+                dp[j] = 1 + min(prev[j], dp[j - 1], prev[j - 1])
+    return dp[n]
+
+
+def _typosquat_score(label: str) -> tuple[float, str]:
+    """Return (max_similarity, matched_brand) against KNOWN_BRANDS."""
+    best, brand_match = 0.0, ""
+    for brand in KNOWN_BRANDS:
+        if label == brand:
+            continue
+        dist = _edit_distance(label, brand)
+        max_len = max(len(label), len(brand))
+        sim = 1.0 - dist / max_len
+        if sim > best:
+            best, brand_match = sim, brand
+    return best, brand_match
+
+
+def _combosquat_tokens(hostname: str) -> tuple[bool, str]:
+    """Check if hostname contains a brand name as a substring but isn't the real domain."""
+    # Strip www and common prefixes
+    parts = hostname.lower().split(".")
+    # Remove known TLD-like suffixes to get meaningful parts
+    meaningful = [p for p in parts if p not in ("www", "com", "net", "org", "co", "uk")]
+    # Rejoin and tokenise on hyphens/numbers
+    full = "-".join(meaningful)
+    tokens = re.split(r"[-_0-9]+", full)
+    for brand in KNOWN_BRANDS:
+        for token in tokens:
+            if brand in token and token != brand:
+                return True, brand
+            if token in brand and len(token) >= 4:
+                return True, brand
+    return False, ""
+
+
+def _get_registered_domain(hostname: str) -> str:
+    """Very simple eTLD+1 — just last two dot-parts."""
+    parts = hostname.split(".")
+    if len(parts) >= 2:
+        return ".".join(parts[-2:])
+    return hostname
+
+
+def extract(url: str) -> dict:
+    url = url.strip()
+    try:
+        parsed = urlparse(url if "://" in url else "http://" + url)
+    except Exception:
+        return {}
+
+    scheme = parsed.scheme.lower()
+    hostname = (parsed.hostname or "").lower()
+    path = parsed.path or ""
+    query = parsed.query or ""
+    tld = "." + hostname.split(".")[-1] if "." in hostname else ""
+    reg_domain = _get_registered_domain(hostname)
+
+    # --- Structural ---
+    url_length = len(url)
+    hostname_length = len(hostname)
+    path_length = len(path)
+    dot_count = hostname.count(".")
+    hyphen_count = hostname.count("-")
+    digit_count = sum(c.isdigit() for c in hostname)
+    subdomain_depth = max(0, dot_count - 1)
+    at_symbol = int("@" in url)
+    double_slash = int("//" in path)
+    hex_chars = int(bool(re.search(r"%[0-9a-f]{2}", url, re.I)))
+    ip_host = int(bool(re.match(
+        r"^(\d{1,3}\.){3}\d{1,3}$", hostname)))
+    punycode = int("xn--" in hostname)
+
+    # --- TLD & shortener ---
+    sus_tld = int(tld in SUSPICIOUS_TLDS)
+    is_shortener = int(reg_domain in SHORTENERS)
+    uses_https = int(scheme == "https")
+
+    # --- Entropy ---
+    hostname_entropy = _entropy(hostname)
+    path_entropy = _entropy(path)
+
+    # --- Keywords ---
+    full_lower = url.lower()
+    cred_keyword_count = sum(kw in full_lower for kw in CREDENTIAL_KEYWORDS)
+
+    # --- Brand impersonation ---
+    # Find the primary label (second-to-last part, ignoring www)
+    h_parts = [p for p in hostname.split(".") if p]
+    primary_label = ""
+    if len(h_parts) >= 2:
+        primary_label = h_parts[-2]  # e.g. "paypa1" from "paypa1-secure-login.tk"
+    elif h_parts:
+        primary_label = h_parts[0]
+
+    # Typosquatting on split tokens (handles "paypa1-secure")
+    tokens = re.split(r"[-_]", primary_label)
+    best_typo, best_brand = 0.0, ""
+    for tok in tokens:
+        if len(tok) < 3:
+            continue
+        score, brand = _typosquat_score(tok)
+        if score > best_typo:
+            best_typo, best_brand = score, brand
+
+    combosquat, combo_brand = _combosquat_tokens(hostname)
+
+    # --- Query params ---
+    param_count = len(query.split("&")) if query else 0
+    redirect_param = int(any(
+        kw in query.lower() for kw in ["redirect", "url=", "next=", "goto=", "return="]
+    ))
+
+    return {
+        "url_length": url_length,
+        "hostname_length": hostname_length,
+        "path_length": path_length,
+        "dot_count": dot_count,
+        "hyphen_count": hyphen_count,
+        "digit_count": digit_count,
+        "subdomain_depth": subdomain_depth,
+        "at_symbol": at_symbol,
+        "double_slash": double_slash,
+        "hex_chars": hex_chars,
+        "ip_host": ip_host,
+        "punycode": punycode,
+        "suspicious_tld": sus_tld,
+        "is_shortener": is_shortener,
+        "uses_https": uses_https,
+        "hostname_entropy": round(hostname_entropy, 4),
+        "path_entropy": round(path_entropy, 4),
+        "cred_keyword_count": cred_keyword_count,
+        "typosquat_score": round(best_typo, 4),
+        "typosquat_brand": best_brand,
+        "combosquat": int(combosquat),
+        "combosquat_brand": combo_brand,
+        "param_count": param_count,
+        "redirect_param": redirect_param,
+    }
+
+
+def feature_vector(url: str) -> list:
+    """Return numeric feature vector only (for ML model)."""
+    f = extract(url)
+    return [
+        f.get("url_length", 0),
+        f.get("hostname_length", 0),
+        f.get("path_length", 0),
+        f.get("dot_count", 0),
+        f.get("hyphen_count", 0),
+        f.get("digit_count", 0),
+        f.get("subdomain_depth", 0),
+        f.get("at_symbol", 0),
+        f.get("double_slash", 0),
+        f.get("hex_chars", 0),
+        f.get("ip_host", 0),
+        f.get("punycode", 0),
+        f.get("suspicious_tld", 0),
+        f.get("is_shortener", 0),
+        f.get("uses_https", 0),
+        f.get("hostname_entropy", 0),
+        f.get("path_entropy", 0),
+        f.get("cred_keyword_count", 0),
+        f.get("typosquat_score", 0),
+        f.get("combosquat", 0),
+        f.get("param_count", 0),
+        f.get("redirect_param", 0),
+    ]
+
+
+FEATURE_NAMES = [
+    "url_length", "hostname_length", "path_length", "dot_count", "hyphen_count",
+    "digit_count", "subdomain_depth", "at_symbol", "double_slash", "hex_chars",
+    "ip_host", "punycode", "suspicious_tld", "is_shortener", "uses_https",
+    "hostname_entropy", "path_entropy", "cred_keyword_count", "typosquat_score",
+    "combosquat", "param_count", "redirect_param",
+]
