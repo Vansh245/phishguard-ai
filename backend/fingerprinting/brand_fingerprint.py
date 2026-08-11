@@ -115,40 +115,78 @@ def register_brand_from_bytes(name: str, image_bytes: bytes):
     KNOWN_BRANDS_DB[name] = _signature(img)
 
 
-# Pre-seed standard brands database with signatures
+# Pre-seed standard brands database with REAL signatures.
+# Each default brand gets a small synthetic login-page mockup (header bar +
+# a button/accent block, roughly matching that brand's real login page
+# layout and palette) rendered with PIL, then run through the exact same
+# _signature() pipeline used for user-uploaded screenshots. This keeps the
+# comparison apples-to-apples instead of hand-typing arbitrary hash bits.
+_BRAND_TEMPLATES = {
+    # name: (header_rgb, accent/button_rgb, header_height_frac)
+
+    # Payments / fintech
+    "PayPal":     ((0, 48, 135),    (0, 112, 224),  0.22),
+    "Venmo":      ((61, 149, 206),  (255, 255, 255), 0.18),
+    "Paytm":      ((0, 47, 108),    (0, 186, 244),  0.20),
+    "PhonePe":    ((94, 21, 139),   (255, 255, 255), 0.18),
+    "Stripe":     ((99, 91, 255),   (255, 255, 255), 0.14),
+    "Coinbase":   ((11, 37, 251),   (255, 255, 255), 0.16),
+    "Binance":    ((24, 26, 32),    (240, 185, 11),  0.16),
+
+    # Big tech
+    "Google":     ((255, 255, 255), (66, 133, 244), 0.14),
+    "Microsoft":  ((243, 243, 243), (0, 120, 212),  0.14),
+    "Apple":      ((245, 245, 247), (0, 0, 0),      0.12),
+    "Facebook":   ((24, 119, 242),  (255, 255, 255), 0.16),
+    "Instagram":  ((255, 255, 255), (225, 48, 108), 0.14),
+    "LinkedIn":   ((0, 119, 181),   (255, 255, 255), 0.16),
+    "Netflix":    ((20, 20, 20),    (229, 9, 20),   0.18),
+    "Dropbox":    ((255, 255, 255), (0, 97, 254),   0.14),
+    "Adobe":      ((250, 10, 10),   (255, 255, 255), 0.16),
+
+    # E-commerce
+    "Amazon":     ((15, 17, 17),    (255, 153, 0),  0.16),
+    "eBay":       ((255, 255, 255), (233, 74, 30),  0.14),
+    "Walmart":    ((0, 76, 145),    (255, 194, 32), 0.18),
+    "Flipkart":   ((40, 116, 240),  (255, 224, 0),  0.18),
+    "Etsy":       ((255, 255, 255), (247, 105, 26), 0.14),
+
+    # Shipping / logistics
+    "FedEx":      ((76, 15, 122),   (255, 102, 0),  0.16),
+    "DHL":        ((255, 204, 0),   (215, 0, 46),   0.16),
+    "USPS":       ((0, 40, 104),    (222, 24, 46),  0.16),
+
+    # Banks
+    "HDFC Bank":  ((4, 30, 66),     (237, 28, 36),  0.20),
+    "ICICI Bank": ((242, 101, 34),  (183, 32, 43),  0.20),
+    "Chase":      ((17, 84, 168),   (255, 255, 255), 0.20),
+    "Wells Fargo": ((215, 25, 32),  (255, 204, 0),  0.20),
+    "Citibank":   ((0, 79, 159),    (255, 255, 255), 0.20),
+}
+
+
+def _render_brand_template(header_rgb, accent_rgb, header_h_frac, size=(800, 600)):
+    """Build a simple synthetic login-page mockup for a brand template."""
+    from PIL import ImageDraw
+    w, h = size
+    img = Image.new("RGB", size, color=(255, 255, 255))
+    draw = ImageDraw.Draw(img)
+    header_h = int(h * header_h_frac)
+    draw.rectangle([0, 0, w, header_h], fill=header_rgb)
+    # A centered "login button" block, roughly where most login forms put one
+    btn_w, btn_h = w // 4, h // 14
+    btn_x = (w - btn_w) // 2
+    btn_y = header_h + h // 6
+    draw.rectangle([btn_x, btn_y, btn_x + btn_w, btn_y + btn_h], fill=accent_rgb)
+    return img
+
+
 def _init_default_brands():
     if not KNOWN_BRANDS_DB:
-        # Define standard brand templates (Header R, G, B + signature)
-        # PayPal (Deep Blue header profile)
-        KNOWN_BRANDS_DB["PayPal"] = {
-            "phash": 0xf0f0f0f0f0f0f0f0,
-            "color_sig": [0.02, 0.28, 0.65] + [1.0,0,0,0,0,0,0,0]*3
-        }
-        # Google (Clean White profile)
-        KNOWN_BRANDS_DB["Google"] = {
-            "phash": 0x0f0f0f0f0f0f0f0f,
-            "color_sig": [0.96, 0.96, 0.96] + [0,0,0,0,0,0,0,1.0]*3
-        }
-        # Amazon (Slate Black profile)
-        KNOWN_BRANDS_DB["Amazon"] = {
-            "phash": 0xaaaaaaaaaaaaaaaa,
-            "color_sig": [0.07, 0.10, 0.13] + [1.0,0,0,0,0,0,0,0]*3
-        }
-        # HDFC Bank (Navy Blue profile)
-        KNOWN_BRANDS_DB["HDFC Bank"] = {
-            "phash": 0x5555555555555555,
-            "color_sig": [0.0, 0.20, 0.60] + [1.0,0,0,0,0,0,0,0]*3
-        }
-        # Apple (Light Gray profile)
-        KNOWN_BRANDS_DB["Apple"] = {
-            "phash": 0x3333333333333333,
-            "color_sig": [0.95, 0.95, 0.95] + [0,0,0,0,0,0,0,1.0]*3
-        }
-        # Netflix (Dark Red-Black profile)
-        KNOWN_BRANDS_DB["Netflix"] = {
-            "phash": 0x7777777777777777,
-            "color_sig": [0.05, 0.05, 0.05] + [1.0,0,0,0,0,0,0,0]*3
-        }
+        for name, (header_rgb, accent_rgb, header_h) in _BRAND_TEMPLATES.items():
+            template_img = _render_brand_template(header_rgb, accent_rgb, header_h)
+            KNOWN_BRANDS_DB[name] = _signature(template_img)
+
 
 def compare_to_brands(image_path: str = None, image_bytes: bytes = None,
                       threshold: float = 0.75) -> dict:
@@ -173,21 +211,6 @@ def compare_to_brands(image_path: str = None, image_bytes: bytes = None,
     results = []
     for brand, ref_sig in KNOWN_BRANDS_DB.items():
         sim = _sig_similarity(sig, ref_sig)
-        
-        # Smart boost based on real-world color similarity for standard brands
-        avg_rgb = sig["color_sig"][:3]
-        ref_rgb = ref_sig["color_sig"][:3]
-        
-        # Calculate color difference
-        color_diff = sum(abs(a - b) for a, b in zip(avg_rgb, ref_rgb))
-        
-        if color_diff < 0.25:
-            # High matching color profile, boost similarity
-            sim = max(sim, 0.85 + (0.12 * (1.0 - color_diff / 0.25)))
-        elif color_diff < 0.45:
-            # Moderate match
-            sim = max(sim, 0.70 + (0.10 * (1.0 - color_diff / 0.45)))
-            
         results.append({
             "brand": brand,
             "similarity": round(sim, 4),
@@ -203,6 +226,7 @@ def compare_to_brands(image_path: str = None, image_bytes: bytes = None,
         "all_matches": results,
         "threshold": threshold,
     }
+
 
 
 def _is_legitimate_domain(hostname: str, brand: str) -> bool:

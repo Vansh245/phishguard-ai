@@ -43,7 +43,7 @@ export default function DashboardPage() {
   const totalScanned = stats.total_scanned || 1247
   const totalPhishing = stats.total_phishing || 89
   const phishingRate = stats.phishing_rate_pct || 7.1
-  const campaigns = 12
+  const campaigns = stats.total_campaigns_detected ?? 0
 
   const STAT_CARDS = [
     {
@@ -56,7 +56,7 @@ export default function DashboardPage() {
     },
     {
       icon: '🕸️', label: 'Campaigns Detected', value: campaigns,
-      delta: '3 active now', color: '#ffa502', iconBg: 'var(--amber-glow)',
+      delta: 'From Campaign Graph scans', color: '#ffa502', iconBg: 'var(--amber-glow)',
     },
     {
       icon: '🎯', label: 'Model Accuracy', value: 97.3, isDecimal: true, suffix: '%',

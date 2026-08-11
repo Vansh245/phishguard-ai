@@ -59,6 +59,7 @@ scan_history: deque = deque(
 stats_lock = threading.Lock()
 _total_scanned = 4
 _total_phishing = 2
+_total_campaigns = 0
 _model_ready = False
 
 
@@ -187,6 +188,13 @@ def cluster_urls(req: ClusterRequest):
         campaigns = _cluster(req.urls, threshold=req.threshold)
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Clustering error: {e}")
+
+    with stats_lock:
+        global _total_campaigns
+        # Only count genuine multi-URL campaigns, not singleton "campaigns
+        # of one" — those aren't really a detected campaign.
+        _total_campaigns += sum(1 for c in campaigns if c["size"] > 1)
+
     return {
         "campaigns": campaigns,
         "total_campaigns": len(campaigns),
@@ -242,6 +250,7 @@ def get_stats():
             "total_phishing": _total_phishing,
             "total_safe": _total_scanned - _total_phishing,
             "phishing_rate_pct": phishing_rate,
+            "total_campaigns_detected": _total_campaigns,
         }
 
 

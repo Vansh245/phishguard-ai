@@ -25,10 +25,49 @@ CREDENTIAL_KEYWORDS = [
 ]
 
 KNOWN_BRANDS = [
-    "paypal", "google", "amazon", "apple", "microsoft", "facebook",
-    "instagram", "netflix", "bank", "wellsfargo", "chase", "citibank",
-    "twitter", "linkedin", "dropbox", "icloud", "ebay", "walmart",
-    "fedex", "dhl", "usps", "irs", "coinbase", "binance",
+    # Big tech / platforms
+    "google", "microsoft", "apple", "amazon", "facebook", "meta",
+    "instagram", "twitter", "linkedin", "youtube", "netflix", "spotify",
+    "dropbox", "icloud", "adobe", "yahoo", "outlook", "gmail",
+    "whatsapp", "telegram", "snapchat", "tiktok", "pinterest", "reddit",
+    "discord", "zoom", "slack", "github", "gitlab",
+
+    # E-commerce / retail
+    "ebay", "walmart", "alibaba", "aliexpress", "flipkart", "myntra",
+    "target", "bestbuy", "costco", "shopify", "etsy", "wayfair",
+
+    # Shipping / logistics
+    "fedex", "dhl", "usps", "ups", "indiapost", "bluedart",
+
+    # Government / tax
+    "irs", "socialsecurity", "medicare", "incometax",
+
+    # Crypto / fintech
+    "coinbase", "binance", "kraken", "metamask", "blockchain",
+    "paypal", "venmo", "stripe", "wise", "westernunion",
+    "paytm", "phonepe", "googlepay", "razorpay", "cashapp", "zelle",
+
+    # US / global banks
+    "chase", "wellsfargo", "citibank", "citi", "bankofamerica", "usbank",
+    "capitalone", "hsbc", "barclays", "santander", "tdbank", "pnc",
+    "americanexpress", "discover", "mastercard", "visa",
+
+    # Indian banks / NBFCs
+    "hdfcbank", "icicibank", "sbi", "axisbank", "kotak", "pnbindia",
+    "yesbank", "idfcfirst", "indusind", "bankofbaroda",
+
+    # Airlines / travel
+    "airbnb", "booking", "expedia", "delta", "united", "americanairlines",
+    "emirates", "indigo", "airindia",
+
+    # Telecom
+    "verizon", "att", "tmobile", "vodafone", "airtel", "jio",
+
+    # Cloud / SaaS
+    "aws", "azure", "salesforce", "oracle", "ibm", "cloudflare",
+
+    # Streaming / entertainment
+    "disney", "hulu", "hbomax", "primevideo",
 ]
 
 
@@ -58,10 +97,13 @@ def _edit_distance(a: str, b: str) -> int:
 
 def _typosquat_score(label: str) -> tuple[float, str]:
     """Return (max_similarity, matched_brand) against KNOWN_BRANDS."""
+    if label in KNOWN_BRANDS:
+        # The label IS a recognized real brand itself — it can't
+        # simultaneously be typosquatting a *different* brand just because
+        # the two names happen to look alike (e.g. "github" vs "gitlab").
+        return 0.0, ""
     best, brand_match = 0.0, ""
     for brand in KNOWN_BRANDS:
-        if label == brand:
-            continue
         dist = _edit_distance(label, brand)
         max_len = max(len(label), len(brand))
         sim = 1.0 - dist / max_len
@@ -72,18 +114,39 @@ def _typosquat_score(label: str) -> tuple[float, str]:
 
 def _combosquat_tokens(hostname: str) -> tuple[bool, str]:
     """Check if hostname contains a brand name as a substring but isn't the real domain."""
-    # Strip www and common prefixes
     parts = hostname.lower().split(".")
-    # Remove known TLD-like suffixes to get meaningful parts
+    # The registered domain's second-level label (e.g. "google" in
+    # "accounts.google.com" or plain "google.com") — if this IS any
+    # recognized brand's real domain, it can't simultaneously be
+    # impersonating a *different* brand (handles both directions of prefix
+    # collisions like "google"/"googlepay").
+    registered_label = parts[-2] if len(parts) >= 2 else (parts[0] if parts else "")
+    if registered_label in KNOWN_BRANDS:
+        return False, ""
+
+    # Strip www and common prefixes
     meaningful = [p for p in parts if p not in ("www", "com", "net", "org", "co", "uk")]
     # Rejoin and tokenise on hyphens/numbers
     full = "-".join(meaningful)
     tokens = re.split(r"[-_0-9]+", full)
     for brand in KNOWN_BRANDS:
         for token in tokens:
-            if brand in token and token != brand:
+            # Short brand codes (irs, ups, sbi, aws...) are prone to
+            # matching unrelated words that merely contain those letters
+            # ("government" contains "gov"). Require an exact token match
+            # for anything under 5 characters; only longer, more
+            # distinctive brand names get substring matching.
+            if len(brand) < 5:
+                if token == brand:
+                    return True, brand
+                continue
+            if brand in token:
                 return True, brand
-            if token in brand and len(token) >= 4:
+            if token in brand and len(token) >= 4 and token not in KNOWN_BRANDS:
+                # Guard against prefix collisions between two distinct real
+                # brands (e.g. "google" is a genuine substring of
+                # "googlepay") — only treat this as an abbreviation if the
+                # token isn't itself a recognized brand in its own right.
                 return True, brand
     return False, ""
 
