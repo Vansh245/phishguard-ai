@@ -89,9 +89,13 @@ export default function AssistantPage() {
     const file = e.target.files?.[0]
     if (!file) return
 
+    const MAX_FILE_CHARS = 8000
     const reader = new FileReader()
     reader.onload = async (event) => {
-      const content = event.target.result
+      let content = event.target.result
+      if (content.length > MAX_FILE_CHARS) {
+        content = content.slice(0, MAX_FILE_CHARS) + '\n\n[...truncated, file too large]'
+      }
       const userText = `Please check this document (${file.name}) for phishing links:\n\n${content}`
 
       const userMsg = {

@@ -8,16 +8,16 @@ import time
 import threading
 from datetime import datetime, timezone
 from typing import Optional
-from collections import deque
+from collections import deque, defaultdict
 
 # Add current directory to Python path
 sys.path.insert(0, os.path.dirname(__file__))
 
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, BackgroundTasks
+from fastapi import FastAPI, HTTPException, Request, UploadFile, File, Form, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
-from pydantic import BaseModel, HttpUrl
+from pydantic import BaseModel, HttpUrl, field_validator
 
 # ── Internal modules ──────────────────────────────────────────────────────────
 from model.predict import predict as _predict
@@ -44,12 +44,43 @@ app = FastAPI(
     description="URL phishing scanner, campaign graph clustering, and brand fingerprinting API",
 )
 
+# CORS: comma-separated allowlist via env var (set the real frontend origin(s)
+# on Render). Falls back to local dev origins only — never "*", since /chat
+# and /fingerprint cost real money / mutate shared state per call.
+_default_origins = "http://localhost:5173,http://localhost:3000,https://phishguard-ai-1-n0z0.onrender.com"
+ALLOWED_ORIGINS = [
+    o.strip() for o in os.environ.get("ALLOWED_ORIGINS", _default_origins).split(",") if o.strip()
+]
+ADMIN_API_KEY = os.environ.get("ADMIN_API_KEY", "")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Content-Type", "X-Admin-Key"],
 )
+
+# ── Minimal per-IP rate limiting (in-memory; fine for a single instance) ──────
+_RATE_LIMITS = {"/chat": (10, 60), "/scan": (30, 60), "/scan/batch": (10, 60), "/cluster": (10, 60)}
+_rate_buckets: dict = defaultdict(deque)
+_rate_lock = threading.Lock()
+
+
+@app.middleware("http")
+async def rate_limit(request: Request, call_next):
+    limit = _RATE_LIMITS.get(request.url.path)
+    if limit:
+        max_calls, window_secs = limit
+        key = (request.client.host if request.client else "unknown", request.url.path)
+        now = time.monotonic()
+        with _rate_lock:
+            bucket = _rate_buckets[key]
+            while bucket and now - bucket[0] > window_secs:
+                bucket.popleft()
+            if len(bucket) >= max_calls:
+                return JSONResponse(status_code=429, content={"detail": "Rate limit exceeded — try again shortly."})
+            bucket.append(now)
+    return await call_next(request)
 
 # ── In-memory scan history (last 200 results) ─────────────────────────────────
 from datetime import datetime, timezone
@@ -72,12 +103,10 @@ _model_ready = False
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
 class ScanRequest(BaseModel):
     url: str
-    include_network: bool = False
 
 
 class BatchScanRequest(BaseModel):
     urls: list[str]
-    include_network: bool = False
 
 
 class ClusterRequest(BaseModel):
@@ -85,13 +114,31 @@ class ClusterRequest(BaseModel):
     threshold: float = 0.35
 
 
+MAX_CHAT_MESSAGE_CHARS = 8000
+MAX_CHAT_MESSAGES = 30
+
+
 class ChatMessage(BaseModel):
     role: str  # "user" | "assistant"
     content: str
 
+    @field_validator("content")
+    @classmethod
+    def _cap_length(cls, v: str) -> str:
+        if len(v) > MAX_CHAT_MESSAGE_CHARS:
+            raise ValueError(f"message content exceeds {MAX_CHAT_MESSAGE_CHARS} characters")
+        return v
+
 
 class ChatRequest(BaseModel):
     messages: list[ChatMessage]
+
+    @field_validator("messages")
+    @classmethod
+    def _cap_count(cls, v: list) -> list:
+        if len(v) > MAX_CHAT_MESSAGES:
+            raise ValueError(f"conversation exceeds {MAX_CHAT_MESSAGES} messages — start a new chat")
+        return v
 
 
 class ScanResult(BaseModel):
@@ -275,9 +322,12 @@ async def fingerprint(
 
 @app.post("/fingerprint/register")
 async def register_brand(
+    request: Request,
     name: str = Form(...),
     reference: UploadFile = File(...),
 ):
+    if not ADMIN_API_KEY or request.headers.get("X-Admin-Key") != ADMIN_API_KEY:
+        raise HTTPException(status_code=403, detail="Admin key required to register brand references.")
     if not FINGERPRINT_OK:
         raise HTTPException(status_code=503, detail="Pillow not installed")
     image_bytes = await reference.read()
