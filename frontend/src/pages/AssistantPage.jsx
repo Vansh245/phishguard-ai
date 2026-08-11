@@ -21,7 +21,7 @@ export default function AssistantPage() {
   const [messages, setMessages] = useState([
     {
       sender: 'bot',
-      text: 'Hello! I am your PhishGuard AI Assistant. I can scan your emails, document files, or text messages for phishing threats.\n\nPaste a message, type a link, or drop a document/text file here to start!',
+      text: 'Hello! I am your PhishGuard AI Assistant. Ask me about phishing, scams, or online safety — or paste a link, email, or document and I\'ll scan it for you.',
       timestamp: new Date(),
     },
   ])
@@ -38,68 +38,50 @@ export default function AssistantPage() {
     scrollToBottom()
   }, [messages, loading])
 
-  // Extract URLs from text
-  const extractUrls = (text) => {
-    const urlRegex = /(https?:\/\/[^\s]+)/gi
-    return text.match(urlRegex) || []
-  }
-
-  // Scan a single URL
-  const scanUrl = async (url) => {
-    try {
-      const res = await axios.post(`${API_BASE}/scan`, { url })
-      return res.data
-    } catch {
-      // Offline fallback mock
-      return getMockScanResult(url)
+  // Send the full conversation to the real AI Assistant backend. The
+  // assistant decides for itself whether to call the scan_url tool
+  // (running the real classifier) based on what's in the message.
+  const sendToAssistant = async (allMessages) => {
+    const payload = {
+      messages: allMessages
+        .filter(m => m.sender === 'user' || m.sender === 'bot')
+        .map(m => ({ role: m.sender === 'user' ? 'user' : 'assistant', content: m.text })),
     }
+    const res = await axios.post(`${API_BASE}/chat`, payload)
+    return res.data // { reply, scans }
   }
 
   const handleSend = async (textToSend = input) => {
     const text = textToSend.trim()
     if (!text) return
 
-    // Add user message
-    setMessages(prev => [...prev, { sender: 'user', text, timestamp: new Date() }])
+    const userMsg = { sender: 'user', text, timestamp: new Date() }
+    const nextMessages = [...messages, userMsg]
+    setMessages(nextMessages)
     if (textToSend === input) setInput('')
     setLoading(true)
 
-    // Extract urls
-    const urls = extractUrls(text)
-    
-    setTimeout(async () => {
-      if (urls.length === 0) {
-        // Conversational response
-        setMessages(prev => [
-          ...prev,
-          {
-            sender: 'bot',
-            text: "I couldn't find any links in your message. To check for phishing, please provide an email body containing links, paste a URL directly, or upload a document.",
-            timestamp: new Date(),
-          },
-        ])
-        setLoading(false)
-        return
-      }
-
-      // Scan all URLs
-      const results = []
-      for (const url of urls) {
-        const res = await scanUrl(url)
-        results.push(res)
-      }
-
-      // Build bot response
-      const botResponse = {
-        sender: 'bot',
-        text: `I have analyzed your message and scanned **${urls.length} link(s)** for phishing threats. Here is my report:`,
-        scans: results,
-        timestamp: new Date(),
-      }
-
-      setMessages(prev => [...prev, botResponse])
+    try {
+      const { reply, scans } = await sendToAssistant(nextMessages)
+      setMessages(prev => [
+        ...prev,
+        { sender: 'bot', text: reply, scans: scans?.length ? scans : undefined, timestamp: new Date() },
+      ])
+    } catch (err) {
+      const notConfigured = err?.response?.status === 503
+      setMessages(prev => [
+        ...prev,
+        {
+          sender: 'bot',
+          text: notConfigured
+            ? "The AI Assistant isn't configured yet — the server is missing its OpenAI API key. Ask the site admin to set OPENAI_API_KEY."
+            : "Sorry, I couldn't reach the assistant just now. Please try again in a moment.",
+          timestamp: new Date(),
+        },
+      ])
+    } finally {
       setLoading(false)
-    }, 1000)
+    }
   }
 
   // Handle file drop / upload
@@ -110,51 +92,38 @@ export default function AssistantPage() {
     const reader = new FileReader()
     reader.onload = async (event) => {
       const content = event.target.result
-      
-      // Add user message indicating file upload
-      setMessages(prev => [
-        ...prev,
-        {
-          sender: 'user',
-          text: `📄 Uploaded file: **${file.name}**\n\n*Scanning file content...*`,
-          timestamp: new Date(),
-        },
-      ])
+      const userText = `Please check this document (${file.name}) for phishing links:\n\n${content}`
+
+      const userMsg = {
+        sender: 'user',
+        text: `📄 Uploaded file: **${file.name}**\n\n*Scanning file content...*`,
+        timestamp: new Date(),
+      }
+      const nextMessages = [...messages, { ...userMsg, text: userText }]
+      setMessages(prev => [...prev, userMsg])
       setLoading(true)
 
-      const urls = extractUrls(content)
-
-      setTimeout(async () => {
-        if (urls.length === 0) {
-          setMessages(prev => [
-            ...prev,
-            {
-              sender: 'bot',
-              text: `I finished scanning the document **${file.name}** but could not find any links inside it.`,
-              timestamp: new Date(),
-            },
-          ])
-          setLoading(false)
-          return
-        }
-
-        const results = []
-        for (const url of urls) {
-          const res = await scanUrl(url)
-          results.push(res)
-        }
-
+      try {
+        const { reply, scans } = await sendToAssistant(nextMessages)
+        setMessages(prev => [
+          ...prev,
+          { sender: 'bot', text: reply, scans: scans?.length ? scans : undefined, timestamp: new Date() },
+        ])
+      } catch (err) {
+        const notConfigured = err?.response?.status === 503
         setMessages(prev => [
           ...prev,
           {
             sender: 'bot',
-            text: `I extracted and scanned **${urls.length} link(s)** from the document **${file.name}**:`,
-            scans: results,
+            text: notConfigured
+              ? "The AI Assistant isn't configured yet — the server is missing its OpenAI API key."
+              : "Sorry, I couldn't scan that file just now. Please try again in a moment.",
             timestamp: new Date(),
           },
         ])
+      } finally {
         setLoading(false)
-      }, 1200)
+      }
     }
 
     reader.readAsText(file)
@@ -348,7 +317,7 @@ export default function AssistantPage() {
               </div>
               <div className="chat-bubble" style={{ background: 'rgba(255,255,255,0.02)', border: '1px solid var(--border)', borderRadius: 12, padding: '12px 16px', display: 'flex', alignItems: 'center', gap: 10 }}>
                 <span className="spinner" style={{ color: 'var(--green)', width: 14, height: 14 }} />
-                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>AI is scanning links...</span>
+                <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color: 'var(--text-secondary)' }}>AI is thinking...</span>
               </div>
             </div>
           )}
@@ -419,35 +388,3 @@ export default function AssistantPage() {
   )
 }
 
-// ── Offline helper mock ───────────────────────────────────────────
-function getMockScanResult(url) {
-  const lower = url.toLowerCase()
-  const isPhishing = /\.tk|\.ml|\.xyz|\.ga|paypa1|amaz0n|g00gle|192\.|verify|urgent|suspended/.test(lower)
-  const prob = isPhishing ? 0.82 + Math.random() * 0.15 : 0.04 + Math.random() * 0.1
-  const conf = isPhishing ? prob * 100 : (1 - prob) * 100
-
-  const evidence = isPhishing ? [
-    'Suspicious TLD detected (.tk/.ml/.xyz)',
-    'Contains credential/urgency keywords',
-    'No HTTPS — connection is unencrypted',
-  ] : []
-
-  // Extract brand keyword matching
-  let brand = ''
-  if (lower.includes('paypal') || lower.includes('paypa1')) brand = 'paypal'
-  else if (lower.includes('google') || lower.includes('g00gle')) brand = 'google'
-  else if (lower.includes('amazon') || lower.includes('amaz0n')) brand = 'amazon'
-  else if (lower.includes('apple')) brand = 'apple'
-
-  return {
-    url,
-    verdict: isPhishing ? 'PHISHING' : 'SAFE',
-    probability: prob,
-    confidence_pct: conf,
-    evidence,
-    features: {
-      typosquat_brand: brand,
-      uses_https: url.startsWith('https') ? 1 : 0,
-    },
-  }
-}

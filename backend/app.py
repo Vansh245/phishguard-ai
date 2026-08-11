@@ -31,6 +31,12 @@ try:
 except ImportError:
     FINGERPRINT_OK = False
 
+try:
+    from assistant.chat import chat as _chat, OPENAI_API_KEY as _OPENAI_KEY
+    ASSISTANT_OK = bool(_OPENAI_KEY)
+except ImportError:
+    ASSISTANT_OK = False
+
 # ── App setup ─────────────────────────────────────────────────────────────────
 app = FastAPI(
     title="Phishing Campaign Intelligence System",
@@ -79,6 +85,15 @@ class ClusterRequest(BaseModel):
     threshold: float = 0.35
 
 
+class ChatMessage(BaseModel):
+    role: str  # "user" | "assistant"
+    content: str
+
+
+class ChatRequest(BaseModel):
+    messages: list[ChatMessage]
+
+
 class ScanResult(BaseModel):
     url: str
     verdict: str
@@ -113,6 +128,7 @@ def health():
         "model_ready": _model_ready,
         "total_scanned": _total_scanned,
         "fingerprinting_available": FINGERPRINT_OK,
+        "assistant_available": ASSISTANT_OK,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
 
@@ -201,6 +217,41 @@ def cluster_urls(req: ClusterRequest):
         "total_urls": len(req.urls),
         "threshold": req.threshold,
     }
+
+
+# ── AI Assistant (OpenAI, function-calling into the real scanner) ─────────────
+@app.post("/chat")
+def chat_endpoint(req: ChatRequest):
+    if not ASSISTANT_OK:
+        raise HTTPException(
+            status_code=503,
+            detail="AI Assistant is not configured — OPENAI_API_KEY is missing on the server.",
+        )
+    if not req.messages:
+        raise HTTPException(status_code=400, detail="messages cannot be empty")
+    try:
+        history = [{"role": m.role, "content": m.content} for m in req.messages]
+        result = _chat(history)
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Chat error: {e}")
+
+    # Any scans the assistant performed also count toward the live stats,
+    # same as a manual scan would.
+    if result.get("scans"):
+        with stats_lock:
+            global _total_scanned, _total_phishing
+            for r in result["scans"]:
+                _total_scanned += 1
+                if r.get("verdict") == "PHISHING":
+                    _total_phishing += 1
+                scan_history.appendleft({
+                    "url": r.get("url", ""),
+                    "verdict": r.get("verdict", ""),
+                    "confidence_pct": r.get("confidence_pct", 0),
+                    "scanned_at": r.get("scanned_at", datetime.now(timezone.utc).isoformat()),
+                })
+
+    return result
 
 
 # ── Brand fingerprinting ──────────────────────────────────────────────────────

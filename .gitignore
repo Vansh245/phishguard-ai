@@ -1,1 +1,8 @@
-node_modules/`ndist/`n.vite/`n**/__pycache__/`nbackend/model/phishing_model.pkl`nbackend/data/dataset.csv`n.env
+node_modules/
+dist/
+.vite/
+**/__pycache__/
+backend/model/phishing_model.pkl
+backend/data/dataset.csv
+.env
+backend/.env
