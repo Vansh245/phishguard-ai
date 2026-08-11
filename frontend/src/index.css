@@ -53,6 +53,32 @@
   --topbar-height: 64px;
 }
 
+/* ── Light theme override ─────────────────────────────────────
+   Toggled by setting data-theme="light" on <html> (see ThemeToggle
+   in App.jsx). Only the surface/text/border tokens change — accent
+   colors (green/red/amber/blue/purple) stay put so verdict colors
+   read the same in both themes. */
+:root[data-theme="light"] {
+  --bg-base:       #f8fafc;
+  --bg-surface:    #ffffff;
+  --bg-elevated:   #f1f5f9;
+  --bg-card:       rgba(15, 23, 42, 0.03);
+  --bg-card-hover: rgba(15, 23, 42, 0.06);
+
+  --text-primary:  #0f172a;
+  --text-secondary:#475569;
+  --text-muted:    #94a3b8;
+
+  --border:        rgba(15, 23, 42, 0.09);
+  --border-bright: rgba(15, 23, 42, 0.16);
+
+  --shadow-card:  0 10px 30px rgba(15, 23, 42, 0.08);
+}
+
+:root[data-theme="light"] #matrix-canvas {
+  opacity: 0.05;
+}
+
 /* ── Reset ─────────────────────────────────────────────────── */
 *, *::before, *::after {
   box-sizing: border-box;
@@ -71,6 +97,28 @@ body {
   line-height: 1.6;
   overflow-x: hidden;
   min-height: 100vh;
+  transition: background 0.2s ease, color 0.2s ease;
+}
+
+/* ── Theme toggle button ───────────────────────────────────── */
+.theme-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+  background: var(--bg-elevated);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.theme-toggle:hover {
+  color: var(--green);
+  border-color: var(--green-border);
+  background: var(--green-glow);
 }
 
 /* ── Scrollbar ─────────────────────────────────────────────── */

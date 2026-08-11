@@ -1,6 +1,6 @@
 import { Routes, Route, NavLink, useLocation } from 'react-router-dom'
 import { useEffect, useRef, useState } from 'react'
-import { Shield, Search, Network, Fingerprint, Cpu, Activity, Zap, Bot } from 'lucide-react'
+import { Shield, Search, Network, Fingerprint, Cpu, Activity, Zap, Bot, Sun, Moon } from 'lucide-react'
 import DashboardPage from './pages/DashboardPage'
 import ScannerPage from './pages/ScannerPage'
 import CampaignPage from './pages/CampaignPage'
@@ -9,11 +9,11 @@ import AssistantPage from './pages/AssistantPage'
 import { useFeed } from './hooks/useFeed'
 
 const NAV = [
-  { path: '/assistant',  icon: Bot,          label: 'AI Assistant',      section: 'CO-PILOT' },
   { path: '/',           icon: Activity,     label: 'Dashboard',         section: 'INTELLIGENCE' },
   { path: '/scanner',    icon: Search,       label: 'URL Scanner',       section: null },
   { path: '/campaigns',  icon: Network,      label: 'Campaign Graph',    section: null },
   { path: '/fingerprint',icon: Fingerprint,  label: 'Brand Shield',      section: 'ANALYSIS' },
+  { path: '/assistant',  icon: Bot,          label: 'AI Assistant',      section: 'CO-PILOT' },
 ]
 
 function Ticker({ feed }) {
@@ -44,6 +44,33 @@ function Ticker({ feed }) {
   )
 }
 
+const THEME_KEY = 'phishguard-theme'
+
+function useTheme() {
+  const [theme, setTheme] = useState(() => localStorage.getItem(THEME_KEY) || 'dark')
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme
+    localStorage.setItem(THEME_KEY, theme)
+  }, [theme])
+
+  return [theme, setTheme]
+}
+
+function ThemeToggle({ theme, setTheme }) {
+  const isLight = theme === 'light'
+  return (
+    <button
+      className="theme-toggle"
+      onClick={() => setTheme(isLight ? 'dark' : 'light')}
+      title={isLight ? 'Switch to dark mode' : 'Switch to light mode'}
+      aria-label="Toggle color theme"
+    >
+      {isLight ? <Moon size={15} /> : <Sun size={15} />}
+    </button>
+  )
+}
+
 function Clock() {
   const [time, setTime] = useState(new Date())
   useEffect(() => {
@@ -60,6 +87,7 @@ function Clock() {
 export default function App() {
   const location = useLocation()
   const { feed, backendOnline } = useFeed()
+  const [theme, setTheme] = useTheme()
 
   return (
     <>
@@ -116,6 +144,7 @@ export default function App() {
             </span>
             <Ticker feed={feed} />
             <div className="topbar-actions">
+              <ThemeToggle theme={theme} setTheme={setTheme} />
               <Clock />
             </div>
           </header>
