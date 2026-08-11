@@ -17,6 +17,16 @@ SHORTENERS = {
     "is.gd", "cli.gs", "pic.gd", "rebrand.ly", "cutt.ly", "shorte.st",
 }
 
+# Compound/ccTLD-style suffixes: many countries use a two-part public
+# suffix (co.uk, com.au, bank.in...) where the naive "last two labels"
+# heuristic misidentifies the SECOND label as the registered domain
+# instead of the real owner one level up — e.g. for "sbi.bank.in" the
+# real owner is "sbi", not "bank". Without this, a legitimate domain
+# using one of these suffixes gets misread as impersonating itself.
+COMPOUND_SUFFIX_LABELS = {
+    "bank", "co", "com", "net", "org", "gov", "edu", "ac", "or", "ne", "in",
+}
+
 CREDENTIAL_KEYWORDS = [
     "login", "signin", "sign-in", "verify", "secure", "account",
     "update", "confirm", "banking", "password", "credential",
@@ -70,6 +80,20 @@ KNOWN_BRANDS = [
     "disney", "hulu", "hbomax", "primevideo",
 ]
 
+# Generic dictionary words that happen to be substrings of one or more
+# brand names above ("bank" is inside "citibank"/"bankofamerica"/"usbank",
+# "pay" is inside "paypal"/"googlepay", "id" is inside "indusind"...).
+# Without excluding these, ANY domain containing a plain English word like
+# "bank" gets flagged as impersonating whichever brand happens to contain
+# that substring — e.g. real domains like sbi.bank.in (India uses
+# "bank.in" as a quasi-TLD structure) were being flagged as combosquatting
+# "citibank" and typosquatting "usbank" purely because of the word "bank".
+GENERIC_LABEL_STOPWORDS = {
+    "bank", "pay", "id", "app", "web", "online", "secure", "login",
+    "account", "service", "services", "mail", "home", "card", "net",
+    "shop", "store", "money", "cloud", "mobile", "digital", "smart",
+}
+
 
 def _entropy(s: str) -> float:
     if not s:
@@ -102,6 +126,12 @@ def _typosquat_score(label: str) -> tuple[float, str]:
         # simultaneously be typosquatting a *different* brand just because
         # the two names happen to look alike (e.g. "github" vs "gitlab").
         return 0.0, ""
+    if label in GENERIC_LABEL_STOPWORDS:
+        # A plain dictionary word ("bank", "pay", "secure"...) will look
+        # edit-distance-similar to any brand name that happens to contain
+        # it as a substring (e.g. "bank" vs "usbank") without actually
+        # being a typosquat of that brand.
+        return 0.0, ""
     best, brand_match = 0.0, ""
     for brand in KNOWN_BRANDS:
         dist = _edit_distance(label, brand)
@@ -112,19 +142,35 @@ def _typosquat_score(label: str) -> tuple[float, str]:
     return best, brand_match
 
 
+def _real_owner_label(hostname: str) -> str:
+    """The label that actually identifies who registered/owns this domain
+    — last label before the public suffix, stepping back one extra level
+    for compound suffixes (bank.in, co.uk...) same as _get_registered_domain."""
+    parts = [p for p in hostname.lower().split(".") if p]
+    if len(parts) >= 3 and parts[-2] in COMPOUND_SUFFIX_LABELS and len(parts[-2]) <= 6:
+        return parts[-3]
+    if len(parts) >= 2:
+        return parts[-2]
+    return parts[0] if parts else ""
+
+
 def _combosquat_tokens(hostname: str) -> tuple[bool, str]:
     """Check if hostname contains a brand name as a substring but isn't the real domain."""
     parts = hostname.lower().split(".")
-    # The registered domain's second-level label (e.g. "google" in
-    # "accounts.google.com" or plain "google.com") — if this IS any
-    # recognized brand's real domain, it can't simultaneously be
+    # The label that actually owns this domain (e.g. "google" in
+    # "accounts.google.com", or "sbi" in "onlinesbi.sbi.bank.in") — if
+    # this IS any recognized brand's real name, it can't simultaneously be
     # impersonating a *different* brand (handles both directions of prefix
     # collisions like "google"/"googlepay").
-    registered_label = parts[-2] if len(parts) >= 2 else (parts[0] if parts else "")
+    registered_label = _real_owner_label(hostname)
     if registered_label in KNOWN_BRANDS:
         return False, ""
 
-    # Strip www and common prefixes
+    # Strip www and common generic TLD/suffix words. (The real-owner label
+    # is already handled by the KNOWN_BRANDS check above when it's an
+    # exact brand match — it must stay IN this list otherwise, since
+    # hyphenated phishing hosts like "citibank-secure-login.tk" need their
+    # own owner-position label tokenized to catch "citibank" inside it.)
     meaningful = [p for p in parts if p not in ("www", "com", "net", "org", "co", "uk")]
     # Rejoin and tokenise on hyphens/numbers
     full = "-".join(meaningful)
@@ -142,18 +188,27 @@ def _combosquat_tokens(hostname: str) -> tuple[bool, str]:
                 continue
             if brand in token:
                 return True, brand
-            if token in brand and len(token) >= 4 and token not in KNOWN_BRANDS:
+            if (token in brand and len(token) >= 4
+                    and token not in KNOWN_BRANDS
+                    and token not in GENERIC_LABEL_STOPWORDS):
                 # Guard against prefix collisions between two distinct real
                 # brands (e.g. "google" is a genuine substring of
                 # "googlepay") — only treat this as an abbreviation if the
-                # token isn't itself a recognized brand in its own right.
+                # token isn't itself a recognized brand, or a plain
+                # dictionary word that happens to appear inside this brand
+                # name (e.g. "bank" inside "citibank"/"usbank" — that's not
+                # someone abbreviating Citibank, it's just the word "bank").
                 return True, brand
     return False, ""
 
 
 def _get_registered_domain(hostname: str) -> str:
-    """Very simple eTLD+1 — just last two dot-parts."""
+    """Simple eTLD+1 — last two dot-parts, but steps back one more level
+    for two-part compound suffixes (co.uk, bank.in, com.au-style) so the
+    real owner label isn't mistaken for a generic suffix word."""
     parts = hostname.split(".")
+    if len(parts) >= 3 and parts[-2] in COMPOUND_SUFFIX_LABELS and len(parts[-2]) <= 6:
+        return ".".join(parts[-3:])
     if len(parts) >= 2:
         return ".".join(parts[-2:])
     return hostname
@@ -202,13 +257,10 @@ def extract(url: str) -> dict:
     cred_keyword_count = sum(kw in full_lower for kw in CREDENTIAL_KEYWORDS)
 
     # --- Brand impersonation ---
-    # Find the primary label (second-to-last part, ignoring www)
-    h_parts = [p for p in hostname.split(".") if p]
-    primary_label = ""
-    if len(h_parts) >= 2:
-        primary_label = h_parts[-2]  # e.g. "paypa1" from "paypa1-secure-login.tk"
-    elif h_parts:
-        primary_label = h_parts[0]
+    # Find the primary/owner label — same compound-suffix-aware logic as
+    # combosquat detection, so "sbi" in "sbi.bank.in" isn't misread as
+    # "bank" and compared against brand names it has nothing to do with.
+    primary_label = _real_owner_label(hostname)
 
     # Typosquatting on split tokens (handles "paypa1-secure")
     tokens = re.split(r"[-_]", primary_label)
