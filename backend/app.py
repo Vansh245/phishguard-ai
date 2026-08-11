@@ -98,6 +98,10 @@ _total_scanned = 4
 _total_phishing = 2
 _total_campaigns = 0
 _model_ready = False
+_model_cv_f1: Optional[float] = None
+_model_name: Optional[str] = None
+_capabilities: Optional[dict] = None
+_capabilities_computing = False
 
 
 # ── Pydantic schemas ──────────────────────────────────────────────────────────
@@ -153,17 +157,35 @@ class ScanResult(BaseModel):
     scanned_at: str
 
 
-# ── Startup: pre-warm model ───────────────────────────────────────────────────
+# ── Startup: pre-warm model, then compute real capability metrics ─────────────
 @app.on_event("startup")
 async def startup():
-    global _model_ready
+    global _model_ready, _model_cv_f1, _model_name, _capabilities, _capabilities_computing
+
     def _warm():
-        global _model_ready
+        global _model_ready, _model_cv_f1, _model_name, _capabilities, _capabilities_computing
         try:
             _predict("https://www.google.com/")
             _model_ready = True
+            from model.predict import _load
+            artifact = _load()
+            _model_cv_f1 = artifact.get("cv_f1")
+            _model_name = artifact.get("model_name")
         except Exception as e:
             print(f"[WARN] Model warm-up failed: {e}")
+            return
+
+        # Real per-capability detection rates (measured, not hardcoded) —
+        # takes ~10s, so run once here rather than per-request.
+        _capabilities_computing = True
+        try:
+            from model.evaluate_capabilities import evaluate as _evaluate_capabilities
+            _capabilities = _evaluate_capabilities()
+        except Exception as e:
+            print(f"[WARN] Capability evaluation failed: {e}")
+        finally:
+            _capabilities_computing = False
+
     threading.Thread(target=_warm, daemon=True).start()
 
 
@@ -173,11 +195,29 @@ def health():
     return {
         "status": "ok",
         "model_ready": _model_ready,
+        "model_name": _model_name,
+        # Real 5-fold cross-validated F1 from training — NOT a hardcoded
+        # marketing number. See /capabilities for the caveat on what this
+        # does and doesn't mean (synthetic data).
+        "model_cv_f1": _model_cv_f1,
         "total_scanned": _total_scanned,
         "fingerprinting_available": FINGERPRINT_OK,
         "assistant_available": ASSISTANT_OK,
         "timestamp": datetime.now(timezone.utc).isoformat(),
     }
+
+
+# ── Real, measured per-capability detection rates ──────────────────────────────
+@app.get("/capabilities")
+def capabilities():
+    if _capabilities is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Capability metrics are still being computed (~10s after startup). Try again shortly."
+            if _capabilities_computing else
+            "Capability metrics unavailable — evaluation failed on startup, check server logs.",
+        )
+    return _capabilities
 
 
 # ── Scan single URL ───────────────────────────────────────────────────────────
@@ -377,5 +417,6 @@ def root():
             "POST /fingerprint/register": "Register a new brand reference",
             "GET  /stats": "Aggregate statistics",
             "GET  /feed": "Recent scan history",
+            "GET  /capabilities": "Measured per-capability detection rates (real, not hardcoded)",
         },
     }

@@ -37,30 +37,37 @@ function TimeAgo({ iso }) {
 }
 
 export default function DashboardPage() {
-  const { feed: liveFeed, backendOnline, stats } = useFeed()
-  const feed = liveFeed.length ? liveFeed : DEMO_FEED
+  const { feed: liveFeed, backendOnline, stats, health, capabilities } = useFeed()
+  // Only fall back to the demo feed when there's genuinely no live data yet
+  // (backend offline / still loading) — never silently override real data.
+  const feed = liveFeed.length ? liveFeed : (backendOnline ? [] : DEMO_FEED)
 
-  const totalScanned = stats.total_scanned || 1247
-  const totalPhishing = stats.total_phishing || 89
-  const phishingRate = stats.phishing_rate_pct || 7.1
-  const campaigns = stats.total_campaigns_detected ?? 0
+  // stats is null until the first successful /stats fetch — don't treat a
+  // real 0 as "missing" (that was the old bug: `0 || 1247` → fake 1247
+  // shown even when the backend correctly reported zero scans).
+  const totalScanned = stats?.total_scanned ?? null
+  const totalPhishing = stats?.total_phishing ?? null
+  const phishingRate = stats?.phishing_rate_pct ?? null
+  const campaigns = stats?.total_campaigns_detected ?? null
+  const modelAccuracy = health?.model_cv_f1 != null ? health.model_cv_f1 * 100 : null
+  const modelName = health?.model_name
 
   const STAT_CARDS = [
     {
       icon: '🔍', label: 'URLs Scanned', value: totalScanned,
-      delta: '+23 today', color: '#00ff88', iconBg: 'var(--green-glow)',
+      delta: backendOnline ? 'Live count' : 'Offline — no live data', color: '#00ff88', iconBg: 'var(--green-glow)',
     },
     {
       icon: '🚨', label: 'Threats Blocked', value: totalPhishing,
-      delta: `${phishingRate.toFixed(1)}% phishing rate`, color: '#ff4757', iconBg: 'var(--red-glow)',
+      delta: phishingRate != null ? `${phishingRate.toFixed(1)}% phishing rate` : '—', color: '#ff4757', iconBg: 'var(--red-glow)',
     },
     {
       icon: '🕸️', label: 'Campaigns Detected', value: campaigns,
       delta: 'From Campaign Graph scans', color: '#ffa502', iconBg: 'var(--amber-glow)',
     },
     {
-      icon: '🎯', label: 'Model Accuracy', value: 97.3, isDecimal: true, suffix: '%',
-      delta: '5-fold CV F1', color: '#3d9cf5', iconBg: 'var(--blue-glow)',
+      icon: '🎯', label: 'Model Accuracy', value: modelAccuracy, isDecimal: true, suffix: '%',
+      delta: modelName ? `${modelName} · 5-fold CV F1` : '—', color: '#3d9cf5', iconBg: 'var(--blue-glow)',
     },
   ]
 
@@ -90,9 +97,11 @@ export default function DashboardPage() {
               <span style={{ fontSize: 22 }}>{s.icon}</span>
             </div>
             <div className="stat-value" style={{ color: s.color }}>
-              {s.isDecimal
-                ? s.value.toFixed(1) + (s.suffix || '')
-                : <AnimatedCounter target={s.value} />}
+              {s.value == null
+                ? <span style={{ color: 'var(--text-muted)', fontSize: 14 }}>loading…</span>
+                : s.isDecimal
+                  ? s.value.toFixed(1) + (s.suffix || '')
+                  : <AnimatedCounter target={s.value} />}
             </div>
             <div className="stat-label">{s.label}</div>
             <div className="stat-delta">{s.delta}</div>
@@ -129,34 +138,48 @@ export default function DashboardPage() {
           </div>
         </div>
 
-        {/* System capabilities */}
+        {/* System capabilities — real measured detection rates, not
+            hardcoded marketing numbers. Evaluated once at server startup
+            against a held-out synthetic test set (see /capabilities). */}
         <div className="card">
           <div className="card-title">
             <span className="card-title-dot" style={{ background: 'var(--blue)', boxShadow: '0 0 6px var(--blue)' }} />
             Detection Capabilities
+            <span style={{ marginLeft: 'auto', fontSize: 9, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>
+              MEASURED · SYNTHETIC TEST SET
+            </span>
           </div>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-            {[
-              { label: 'Typosquatting Detection', pct: 94, desc: 'Edit-distance on hostname tokens', color: 'var(--green)' },
-              { label: 'Combosquatting Detection', pct: 91, desc: 'Brand-in-subdomain keyword trap', color: 'var(--green)' },
-              { label: 'IP-as-Host Detection', pct: 100, desc: 'Raw IP regex match', color: 'var(--green)' },
-              { label: 'Newly-Registered Domain', pct: 88, desc: 'WHOIS age < 30 days (internet req)', color: 'var(--amber)' },
-              { label: 'Visual Clone Detection', pct: 85, desc: 'pHash + color DNA signature', color: 'var(--purple)' },
-              { label: 'Campaign Graph Clustering', pct: 83, desc: 'Louvain community detection', color: 'var(--blue)' },
-              { label: 'Zero-Day / Novel Obfuscation', pct: 76, desc: 'Anomaly signal combiner', color: 'var(--red)' },
-            ].map(({ label, pct, desc, color }) => (
-              <div key={label}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
-                  <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{label}</span>
-                  <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color }}>{pct}%</span>
+          {!capabilities ? (
+            <div style={{ fontSize: 12, color: 'var(--text-muted)', padding: '20px 0' }}>
+              {backendOnline ? 'Computing real detection rates…' : 'Backend offline — capability metrics unavailable.'}
+            </div>
+          ) : (
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              {[
+                { label: 'Typosquatting Detection', pct: capabilities.typosquatting?.recall_pct, desc: `Edit-distance on hostname tokens · ${capabilities.typosquatting?.false_positive_pct}% false-positive rate`, color: 'var(--green)' },
+                { label: 'Combosquatting Detection', pct: capabilities.combosquatting?.recall_pct, desc: `Brand-in-subdomain keyword trap · ${capabilities.combosquatting?.false_positive_pct}% false-positive rate`, color: 'var(--green)' },
+                { label: 'IP-as-Host Detection', pct: capabilities.ip_as_host?.recall_pct, desc: 'Raw IP regex match', color: 'var(--green)' },
+                { label: 'Suspicious TLD Detection', pct: capabilities.suspicious_tld?.recall_pct, desc: 'Abuse-prone TLD list (.tk/.ml/.xyz…)', color: 'var(--amber)' },
+                { label: 'Visual Clone Detection', pct: capabilities.visual_clone?.recall_pct, desc: `pHash + color signature · ${capabilities.visual_clone?.false_positive_pct}% false-positive rate on unrelated pages`, color: 'var(--purple)' },
+                { label: 'Campaign Graph Clustering', pct: capabilities.campaign_clustering?.purity_pct, desc: 'Cluster purity on synthetic campaign families', color: 'var(--blue)' },
+                { label: 'Zero-Day / Novel Obfuscation', pct: capabilities.zero_day_obfuscation?.recall_pct, desc: `Patterns unseen in training · ${capabilities.zero_day_obfuscation?.false_positive_pct}% false-positive rate`, color: 'var(--red)' },
+              ].map(({ label, pct, desc, color }) => (
+                <div key={label}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: 4 }}>
+                    <span style={{ fontSize: 12, color: 'var(--text-primary)' }}>{label}</span>
+                    <span style={{ fontSize: 12, fontFamily: 'var(--font-mono)', color }}>{pct != null ? `${pct}%` : '—'}</span>
+                  </div>
+                  <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 2 }}>
+                    <div style={{ height: '100%', borderRadius: 2, background: color, width: `${pct || 0}%`, boxShadow: `0 0 6px ${color}44`, transition: 'width 1s' }} />
+                  </div>
+                  <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{desc}</div>
                 </div>
-                <div style={{ height: 4, background: 'var(--border)', borderRadius: 2, marginBottom: 2 }}>
-                  <div style={{ height: '100%', borderRadius: 2, background: color, width: `${pct}%`, boxShadow: `0 0 6px ${color}44`, transition: 'width 1s' }} />
-                </div>
-                <div style={{ fontSize: 10, color: 'var(--text-muted)', fontFamily: 'var(--font-mono)' }}>{desc}</div>
+              ))}
+              <div style={{ fontSize: 9, color: 'var(--text-muted)', marginTop: 4, lineHeight: 1.5 }}>
+                Measured against synthetic rule-generated test URLs, not real-world phishing traffic. Reflects whether each detector does what it's designed to do.
               </div>
-            ))}
-          </div>
+            </div>
+          )}
         </div>
       </div>
 
