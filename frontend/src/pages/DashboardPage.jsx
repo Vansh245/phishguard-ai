@@ -49,7 +49,12 @@ export default function DashboardPage() {
   const totalPhishing = stats?.total_phishing ?? null
   const phishingRate = stats?.phishing_rate_pct ?? null
   const campaigns = stats?.total_campaigns_detected ?? null
-  const modelAccuracy = health?.model_cv_f1 != null ? health.model_cv_f1 * 100 : null
+  // Held-out test accuracy (model never trained on these rows) — honest
+  // generalization estimate, not the optimistic CV score used only for
+  // picking between candidate algorithms.
+  const modelAccuracy = health?.model_test_metrics?.accuracy != null
+    ? health.model_test_metrics.accuracy * 100
+    : null
   const modelName = health?.model_name
 
   const STAT_CARDS = [
@@ -67,7 +72,7 @@ export default function DashboardPage() {
     },
     {
       icon: '🎯', label: 'Model Accuracy', value: modelAccuracy, isDecimal: true, suffix: '%',
-      delta: modelName ? `${modelName} · 5-fold CV F1` : '—', color: '#3d9cf5', iconBg: 'var(--blue-glow)',
+      delta: modelName ? `${modelName} · held-out test set` : '—', color: '#3d9cf5', iconBg: 'var(--blue-glow)',
     },
   ]
 

@@ -41,11 +41,45 @@ PHISHING_PATHS = [
 PHISHING_PREFIXES = ["secure-", "login-", "verify-", "account-", "update-",
                      "auth-", "myaccount-", "safe-"]
 
+# Real brands legitimately DO use these exact words on their own real
+# domains (bank/SSO login pages, "verify your email" flows, etc).
+# CREDENTIAL_KEYWORDS in lexical_features flags these words as risk signal,
+# and without real examples of legit brand-domain + credential-path
+# combinations, a model trained only on generic benign paths (/about,
+# /contact) learns "brand name + login-ish word = phishing" — which
+# then misfires on the brand's own real login page. This closes that gap.
+LEGIT_LOGIN_PATHS = [
+    "/login", "/signin", "/account/login", "/secure/login",
+    "/auth/login", "/account/verify", "/secure/dashboard",
+    "/account/settings/security", "/signin?redirect=/dashboard",
+    "/login?returnUrl=/home", "/account/billing", "/secure/account",
+]
+
 
 def make_benign():
     domain = random.choice(BENIGN_DOMAINS)
     path = random.choice(BENIGN_PATHS)
     return f"https://{domain}{path}"
+
+
+def make_benign_login():
+    """Legitimate brand + a real login/credential-style path."""
+    domain = random.choice(BENIGN_DOMAINS)
+    path = random.choice(LEGIT_LOGIN_PATHS)
+    return f"https://{domain}{path}"
+
+
+# Real SSO subdomains (accounts.google.com, login.microsoftonline.com-style)
+# are extremely common and legitimate, but a subdomain + credential-path
+# combo otherwise looks identical to a phishing sub-domain trick.
+LEGIT_SSO_SUBDOMAINS = ["accounts", "login", "signin", "auth", "secure", "id"]
+
+
+def make_benign_sso_subdomain():
+    sub = random.choice(LEGIT_SSO_SUBDOMAINS)
+    domain = random.choice(BENIGN_DOMAINS)
+    path = random.choice(LEGIT_LOGIN_PATHS)
+    return f"https://{sub}.{domain}{path}"
 
 
 def make_phishing_typosquat():

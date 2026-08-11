@@ -99,6 +99,7 @@ _total_phishing = 2
 _total_campaigns = 0
 _model_ready = False
 _model_cv_f1: Optional[float] = None
+_model_test_metrics: Optional[dict] = None
 _model_name: Optional[str] = None
 _capabilities: Optional[dict] = None
 _capabilities_computing = False
@@ -160,16 +161,17 @@ class ScanResult(BaseModel):
 # ── Startup: pre-warm model, then compute real capability metrics ─────────────
 @app.on_event("startup")
 async def startup():
-    global _model_ready, _model_cv_f1, _model_name, _capabilities, _capabilities_computing
+    global _model_ready, _model_cv_f1, _model_test_metrics, _model_name, _capabilities, _capabilities_computing
 
     def _warm():
-        global _model_ready, _model_cv_f1, _model_name, _capabilities, _capabilities_computing
+        global _model_ready, _model_cv_f1, _model_test_metrics, _model_name, _capabilities, _capabilities_computing
         try:
             _predict("https://www.google.com/")
             _model_ready = True
             from model.predict import _load
             artifact = _load()
             _model_cv_f1 = artifact.get("cv_f1")
+            _model_test_metrics = artifact.get("test_metrics")
             _model_name = artifact.get("model_name")
         except Exception as e:
             print(f"[WARN] Model warm-up failed: {e}")
@@ -196,10 +198,14 @@ def health():
         "status": "ok",
         "model_ready": _model_ready,
         "model_name": _model_name,
-        # Real 5-fold cross-validated F1 from training — NOT a hardcoded
-        # marketing number. See /capabilities for the caveat on what this
-        # does and doesn't mean (synthetic data).
+        # Real metrics from training — NOT hardcoded marketing numbers.
+        # model_cv_f1 is the cross-val score used only for picking between
+        # RandomForest/HistGradientBoosting. model_test_metrics is measured
+        # on a genuinely held-out split of real PhishTank + crawled
+        # legitimate URLs the model never trained on — use this one to
+        # report "accuracy".
         "model_cv_f1": _model_cv_f1,
+        "model_test_metrics": _model_test_metrics,
         "total_scanned": _total_scanned,
         "fingerprinting_available": FINGERPRINT_OK,
         "assistant_available": ASSISTANT_OK,
